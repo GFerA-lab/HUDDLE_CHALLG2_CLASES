@@ -15,11 +15,12 @@ def solicitar_dato(mensaje, tipo_dato, validacion=None):
             print("Entrada inválida.")
 
 class Mapa:
-    def __init__(self, ancho, alto):
+    def __init__(self, ancho, alto, lista_obstaculos):
         self.ancho = ancho
         self.alto = alto
         self.mapa = [[0 for _ in range(ancho)] for _ in range(alto)]
         self.posicion_obstaculo = {}
+        self.lista_obstaculos = lista_obstaculos # Tipos de obstaculos
 
     def mostrar_mapa(self):
         valor_emoji = {
@@ -36,11 +37,15 @@ class Mapa:
 
         for fila in self.mapa:
             print("".join(valor_emoji[celda] for celda in fila))
+    
+    def mostrar_mapa_camino(camino):
+        return None
 
-    def agregar_obstaculo(self, fila, colm, tipo_obs, forma, camino_viable):
-
+    def agregar_obstaculo(self, posicion, tipo_obs, forma, camino_viable):
+        
+        fila, colm = posicion
         self.mapa[fila][colm] = tipo_obs
-        self.posicion_obstaculo[tipo_obs].append((fila,colm))
+        self.posicion_obstaculo[tipo_obs].append(posicion)
 
         for x, y in forma:
             nueva_fila, nueva_colm = fila + x, colm + y # Recorrer vecinos
@@ -50,18 +55,19 @@ class Mapa:
                     self.mapa[nueva_fila][nueva_colm] = tipo_obs
                     self.posicion_obstaculo[tipo_obs].append(nueva_posicion)
     
-    def limpiar_zona(self, fila, colm, forma):
+    def limpiar_zona(self, posicion, forma):
+        fila, colm = posicion
+        self.mapa[fila][colm] = 0
+
         for x, y in forma:
+
             aux_fila, aux_col = fila + x, colm + y # Recorrer vecinos
 
-            if 0 <= aux_fila < self.alto and 0 <= aux_col < self.ancho:
-                if self.mapa[aux_fila][aux_col] != 0:
-
-                    tipo_obs = self.mapa[aux_fila][aux_col]
-
-                    if (aux_fila, aux_col) in self.posicion_obstaculo.get(tipo_obs, []):
-                        self.posicion_obstaculo[tipo_obs].remove((aux_fila, aux_col))
-                        self.mapa[aux_fila][aux_col] = 0
+            if self.verificar_posicion((aux_fila, aux_col), self.lista_obstaculos):
+                    
+                tipo_obs = self.mapa[aux_fila][aux_col]
+                self.posicion_obstaculo[tipo_obs].remove((aux_fila, aux_col))
+                self.mapa[aux_fila][aux_col] = 0
 
     def verificar_posicion(self, posicion, camino_viable):
         fila, colm = posicion
@@ -70,7 +76,38 @@ class Mapa:
             return True
     
         return False
+
+    def solicitar_posicion(self, camino_viable):
+        while True:
+
+            fila = solicitar_dato("Ingrese la fila: ", int)
+            colm = solicitar_dato("Ingrese la columna: ", int)
+
+            if self.verificar_posicion((fila, colm), camino_viable):
+                return (fila, colm)
+            
+            else:
+                print("Posición inválida.")
     
+    def liberar_zona(self, tipo_obs):
+
+        for fila, colm in self.posicion_obstaculo.get(tipo_obs, []):
+
+            if self.mapa[fila][colm] == tipo_obs:
+                self.mapa[fila][colm] = 0
+            
+            else:
+                self.posicion_obstaculo[tipo_obs].remove((fila, colm))
+    
+    def bloquear_zonas(self, tipo_obs):
+
+        for fila, colm in self.posicion_obstaculo.get(tipo_obs, []):
+
+            if self.mapa[fila][colm] == 0:
+                self.mapa[fila][colm] = tipo_obs
+            
+            else:
+                self.posicion_obstaculo[tipo_obs].remove((fila, colm))
 
 
 class BuscarCamino():
@@ -83,7 +120,7 @@ class BuscarCamino():
         cola = deque([inicio])
         visitado = set()
         visitado.add(inicio)
-        padre = {}
+        padre = {inicio: None}
 
         while cola:
             actual = cola.popleft()
@@ -115,13 +152,79 @@ class BuscarCamino():
         return camino
 
 def main():
+    # Recorrer en cruz
     forma_cruz = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    # Recorer en cuadrado
     forma_cuadrado = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
-    terreno_normal = [0]
-    terreno_imprevistos = [0, 2]
+    terreno_normal = [0] #Camino viable
+    terreno_imprevistos = [0, 2] #Camino con imprevistos
+    lista_obstaculos = [1, 2, 3] #Tipos de obstaculos
 
-    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    ancho = solicitar_dato("Ingrese el ancho del mapa: ", int, lambda x: x > 0)
+    alto = solicitar_dato("Ingrese el alto del mapa: ", int, lambda x: x > 0)
+    mapa = Mapa(ancho, alto, lista_obstaculos)
+
+    while True:
+        print("--- Menú ---")
+        print("1. Editar mapa")
+        print("2. Buscar camino")
+        print("3. Crear nuevo mapa")
+        print("4. Salir")
+
+        opcion = solicitar_dato("Seleccione una opción: ", int, lambda x: 1 <= x <= 4)
+
+        if opcion == 1:
+            print("--- Editar mapa ---")
+            print("1. Agregar edificio (cuadrado)")
+            print("2. Agregar agua (cruz)")
+            print("3. Agregar zona bloqueada (cuadrado)")  
+            print("4. Liberar zona bloqueada")
+            print("5. Limpiar zona")
+            print("6. Volver al menú principal")
+
+            opcion_obstaculo = solicitar_dato("Seleccione una opción: ", int, lambda x: 1 <= x <= 5)
+
+            if opcion_obstaculo in [1, 2, 3]:
+
+                posicion_obstaculo = mapa.solicitar_posicion(terreno_normal)
+
+                if opcion_obstaculo == 1:
+                    tipo_obs = 1
+                    forma = forma_cuadrado
+                    camino_viable = terreno_normal
+
+                elif opcion_obstaculo == 2:
+                    tipo_obs = 2
+                    forma = forma_cruz
+                    camino_viable = terreno_imprevistos
+
+                else:
+                    tipo_obs = 3
+                    forma = forma_cuadrado
+                    camino_viable = terreno_normal
+
+                mapa.agregar_obstaculo(posicion_obstaculo, tipo_obs, forma, camino_viable)
+                mapa.mostrar_mapa()
+            
+            elif opcion_obstaculo == 4:
+                tipo_obs = 4
+                mapa.liberar_zona(tipo_obs)
+                mapa.mostrar_mapa()
+
+
+        elif opcion == 2:
+            posicion_inicio = mapa.solicitar_posicion(terreno_normal)
+            posicion_fin = mapa.solicitar_posicion(terreno_normal)
+
+            buscador = BuscarCamino(mapa, forma_cruz)
+
+            camino = buscador.buscar_bfs(posicion_inicio, posicion_fin, terreno_normal)
+
+
+
+
 
     
 
